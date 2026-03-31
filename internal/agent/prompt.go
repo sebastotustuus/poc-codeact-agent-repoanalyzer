@@ -1,9 +1,6 @@
-// Package agent orchestrates the CodeAct loop between the LLM and command executor.
 package agent
 
 // InteractiveSystemPrompt is the system instruction for interactive REPL mode.
-// It instructs the model to use bash code blocks as actions and plain text as answers,
-// supporting ongoing multi-turn conversations about a repository.
 const InteractiveSystemPrompt = `You are an interactive code repository assistant. You explore Git repositories by writing and executing bash commands, and you answer user questions about the codebase.
 
 ## How to work
@@ -30,6 +27,4 @@ find repo/ -name "*.go" | head -20
 - Respond directly to what the user asked. Be concise and specific.
 - You have full context of prior conversation turns — use it to avoid redundant exploration.`
 
-// DefaultFirstTurnPrompt is sent to the model when the user hits Enter without
-// typing anything on the first REPL prompt.
 const DefaultFirstTurnPrompt = "Analyze this repository and provide a comprehensive health report covering: overview, structure, code quality, dependencies, and a summary."

@@ -12,11 +12,10 @@ import (
 	"github.com/user/poc-codeact-repoanalyzer/internal/executor"
 )
 
-// mockLLM is a hand-written mock that returns pre-configured responses in order.
 type mockLLM struct {
 	responses []string
 	calls     int
-	err       error // returned on every call when set
+	err       error
 }
 
 func (m *mockLLM) GenerateContent(_ context.Context, _ []*genai.Content, _ *genai.GenerateContentConfig) (string, error) {
@@ -31,7 +30,6 @@ func (m *mockLLM) GenerateContent(_ context.Context, _ []*genai.Content, _ *gena
 	return text, nil
 }
 
-// mockExecutor records script calls and returns pre-configured results.
 type mockExecutor struct {
 	workDir string
 	results []*executor.Result
@@ -68,8 +66,6 @@ func failResult(stderr string, exitCode int) *executor.Result {
 	return &executor.Result{Stderr: stderr, ExitCode: exitCode}
 }
 
-// --- isURL ---
-
 func TestIsURL(t *testing.T) {
 	t.Parallel()
 
@@ -96,8 +92,6 @@ func TestIsURL(t *testing.T) {
 		})
 	}
 }
-
-// --- Setup ---
 
 func TestSetup_URL(t *testing.T) {
 	t.Parallel()
@@ -140,13 +134,10 @@ func TestSetup_LocalPath(t *testing.T) {
 	t.Parallel()
 
 	exec := &mockExecutor{
-		// test -d → ok, ln -s → ok
 		results: []*executor.Result{okResult(""), okResult("")},
 	}
 	ag := NewAgent(&mockLLM{}, exec)
 
-	// Use a path that filepath.Abs will resolve (doesn't need to actually exist
-	// since the actual test -d runs through the mock executor).
 	err := ag.Setup(context.Background(), "/some/local/repo")
 	if err != nil {
 		t.Fatalf("Setup() error = %v", err)
@@ -160,7 +151,7 @@ func TestSetup_InvalidLocalPath(t *testing.T) {
 	t.Parallel()
 
 	exec := &mockExecutor{
-		results: []*executor.Result{failResult("", 1)}, // test -d fails
+		results: []*executor.Result{failResult("", 1)},
 	}
 	ag := NewAgent(&mockLLM{}, exec)
 
@@ -178,10 +169,9 @@ func TestSetup_ResetsHistory(t *testing.T) {
 
 	exec := &mockExecutor{}
 	ag := NewAgent(&mockLLM{}, exec)
-	// Pre-populate history.
 	ag.history = []*genai.Content{{Role: genai.RoleUser}}
 
-	ag.Setup(context.Background(), "https://github.com/user/repo") //nolint:errcheck
+	ag.Setup(context.Background(), "https://github.com/user/repo")
 
 	if ag.history != nil {
 		t.Error("Setup() should reset history to nil")
@@ -195,7 +185,7 @@ func TestTurn_ImmediateAnswer(t *testing.T) {
 
 	llm := &mockLLM{responses: []string{"The project is written in Go."}}
 	ag := NewAgent(llm, &mockExecutor{})
-	ag.repoDir = "repo" // simulate post-Setup state
+	ag.repoDir = "repo"
 
 	result, iterations, err := ag.Turn(context.Background(), "what language is this?")
 	if err != nil {
@@ -207,7 +197,6 @@ func TestTurn_ImmediateAnswer(t *testing.T) {
 	if iterations != 1 {
 		t.Errorf("iterations = %d, want 1", iterations)
 	}
-	// History: user message + model response = 2
 	if len(ag.history) != 2 {
 		t.Errorf("history len = %d, want 2", len(ag.history))
 	}
@@ -238,7 +227,6 @@ func TestTurn_WithCodeIteration(t *testing.T) {
 	if iterations != 2 {
 		t.Errorf("iterations = %d, want 2", iterations)
 	}
-	// History: user + (model+user obs) + model = 4
 	if len(ag.history) != 4 {
 		t.Errorf("history len = %d, want 4", len(ag.history))
 	}
@@ -249,8 +237,8 @@ func TestTurn_HistoryPersistsAcrossTurns(t *testing.T) {
 
 	llm := &mockLLM{
 		responses: []string{
-			"It is Go.",           // first turn response
-			"The entry is main.", // second turn response
+			"It is Go.",
+			"The entry is main.",
 		},
 	}
 	ag := NewAgent(llm, &mockExecutor{})
@@ -260,7 +248,7 @@ func TestTurn_HistoryPersistsAcrossTurns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Turn() error = %v", err)
 	}
-	histAfterFirst := len(ag.history) // should be 2
+	histAfterFirst := len(ag.history)
 
 	_, _, err = ag.Turn(context.Background(), "what is the entry point?")
 	if err != nil {
@@ -311,8 +299,6 @@ func TestTurn_LLMError(t *testing.T) {
 	}
 }
 
-// --- Analyze (backward-compat wrapper) ---
-
 func TestAnalyze_HappyPath(t *testing.T) {
 	t.Parallel()
 
@@ -324,8 +310,8 @@ func TestAnalyze_HappyPath(t *testing.T) {
 	}
 	exec := &mockExecutor{
 		results: []*executor.Result{
-			okResult("cloned"), // clone in Setup
-			okResult("main.go"), // ls in Turn
+			okResult("cloned"),
+			okResult("main.go"),
 		},
 	}
 

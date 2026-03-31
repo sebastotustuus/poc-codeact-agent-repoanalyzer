@@ -13,28 +13,21 @@ import (
 	"github.com/user/poc-codeact-repoanalyzer/internal/gemini"
 )
 
-// codeBlockRe matches the first fenced bash/sh code block in an LLM response.
-// (?s) enables dot-all so the content can span multiple lines.
 var codeBlockRe = regexp.MustCompile("(?s)```(?:bash|sh)?\n(.*?)```")
 
-// LLM is the interface required by Agent to call the language model.
-// Defined at point of use, not in the gemini package.
 type LLM interface {
 	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (string, error)
 }
 
-// CommandExecutor is the interface required by Agent to run shell commands.
 type CommandExecutor interface {
 	Run(ctx context.Context, script string) (*executor.Result, error)
 	WorkDir() string
 	Close() error
 }
 
-// Compile-time checks that the concrete types satisfy the interfaces.
 var _ LLM = (*gemini.Client)(nil)
 var _ CommandExecutor = (*executor.Executor)(nil)
 
-// Agent orchestrates the CodeAct loop and manages multi-turn conversation state.
 type Agent struct {
 	llm           LLM
 	exec          CommandExecutor
@@ -44,20 +37,16 @@ type Agent struct {
 	repoDir       string           // always "repo" after Setup
 }
 
-// AgentOption configures an Agent.
 type AgentOption func(*Agent)
 
-// WithMaxIterations sets the maximum number of CodeAct iterations per turn.
 func WithMaxIterations(n int) AgentOption {
 	return func(a *Agent) { a.maxIterations = n }
 }
 
-// WithVerbose enables printing of intermediate commands and observations.
 func WithVerbose(v bool) AgentOption {
 	return func(a *Agent) { a.verbose = v }
 }
 
-// NewAgent creates an Agent wired to the given LLM and executor.
 func NewAgent(llm LLM, exec CommandExecutor, opts ...AgentOption) *Agent {
 	a := &Agent{
 		llm:           llm,
@@ -70,7 +59,6 @@ func NewAgent(llm LLM, exec CommandExecutor, opts ...AgentOption) *Agent {
 	return a
 }
 
-// genConfig returns the generation configuration for LLM calls.
 func (a *Agent) genConfig() *genai.GenerateContentConfig {
 	return &genai.GenerateContentConfig{
 		Temperature:     genai.Ptr[float32](0.2),
@@ -81,10 +69,6 @@ func (a *Agent) genConfig() *genai.GenerateContentConfig {
 	}
 }
 
-// Setup prepares the working environment for a repository. If source starts
-// with http:// or https://, the repo is cloned via git. Otherwise source is
-// treated as a local path and symlinked into the executor's temp directory.
-// Setup resets the conversation history.
 func (a *Agent) Setup(ctx context.Context, source string) error {
 	if isURL(source) {
 		cloneScript := fmt.Sprintf("git clone --depth=1 %q repo", source)
@@ -118,9 +102,6 @@ func (a *Agent) Setup(ctx context.Context, source string) error {
 	return nil
 }
 
-// Turn sends a single user instruction through the CodeAct loop and returns
-// the model's final text response, the number of CodeAct iterations used, and
-// any error. Conversation history accumulates across multiple Turn calls.
 func (a *Agent) Turn(ctx context.Context, instruction string) (string, int, error) {
 	a.history = append(a.history, &genai.Content{
 		Role:  genai.RoleUser,
@@ -137,7 +118,6 @@ func (a *Agent) Turn(ctx context.Context, instruction string) (string, int, erro
 
 		code := ExtractCodeBlock(text)
 		if code == "" {
-			// No code block — the model has answered.
 			a.history = append(a.history, &genai.Content{
 				Role:  genai.RoleModel,
 				Parts: []*genai.Part{{Text: text}},
@@ -168,7 +148,6 @@ func (a *Agent) Turn(ctx context.Context, instruction string) (string, int, erro
 		})
 	}
 
-	// Max iterations reached — force the model to answer.
 	a.history = append(a.history, &genai.Content{
 		Role: genai.RoleUser,
 		Parts: []*genai.Part{{
@@ -190,13 +169,9 @@ func (a *Agent) Turn(ctx context.Context, instruction string) (string, int, erro
 	return text, a.maxIterations, nil
 }
 
-// History returns the current conversation history.
 func (a *Agent) History() []*genai.Content {
 	return a.history
 }
-
-// Analyze is a convenience wrapper for single-shot analysis. It calls Setup
-// then Turn with an initial exploration instruction.
 func (a *Agent) Analyze(ctx context.Context, repoURL string) (string, int, error) {
 	if err := a.Setup(ctx, repoURL); err != nil {
 		return "", 0, err
@@ -210,7 +185,6 @@ func (a *Agent) Analyze(ctx context.Context, repoURL string) (string, int, error
 	return a.Turn(ctx, instruction)
 }
 
-// buildObservation formats command output into a user-readable observation message.
 func buildObservation(result *executor.Result, runErr error) string {
 	var b strings.Builder
 	b.WriteString("**Observation:**\n")
@@ -246,8 +220,6 @@ func buildObservation(result *executor.Result, runErr error) string {
 	return b.String()
 }
 
-// ExtractCodeBlock returns the content of the first ```bash or ```sh block
-// found in text, or an empty string if none is present.
 func ExtractCodeBlock(text string) string {
 	matches := codeBlockRe.FindStringSubmatch(text)
 	if len(matches) < 2 {
@@ -256,7 +228,6 @@ func ExtractCodeBlock(text string) string {
 	return strings.TrimSpace(matches[1])
 }
 
-// isURL reports whether source looks like a remote Git URL.
 func isURL(source string) bool {
 	return strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
 }

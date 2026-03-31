@@ -1,4 +1,3 @@
-// Package executor runs shell commands in a sandboxed environment with timeout and command filtering.
 package executor
 
 import (
